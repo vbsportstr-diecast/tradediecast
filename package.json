@@ -1,0 +1,14 @@
+{
+  "name": "tradediecast",
+  "version": "1.0.0",
+  "description": "TradeDiecast — Buy & Sell Diecast Cars Marketplace",
+  "private": true,
+  "workspaces": ["frontend", "backend"],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=frontend\" \"npm run dev --workspace=backend\"",
+    "build": "npm run build --workspace=frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
