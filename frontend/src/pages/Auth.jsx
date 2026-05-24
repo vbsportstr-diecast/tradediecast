@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Car } from 'lucide-react'
+import { Car, CheckCircle, XCircle, Loader } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
@@ -14,49 +14,120 @@ export default function Auth() {
   const [agreedToS, setAgreedToS]             = useState(false)
   const [agreedPrivacy, setAgreedPrivacy]     = useState(false)
   const [agreedMarketing, setAgreedMarketing] = useState(true)
+
+  // Username availability state
+  const [usernameStatus, setUsernameStatus] = useState('idle') // idle | checking | available | taken
+  const [emailStatus, setEmailStatus]       = useState('idle') // idle | checking | available | taken
+
   const { signIn, signUp } = useAuth()
   const navigate = useNavigate()
 
-  const canSubmit = mode === 'signin' || (agreedToS && agreedPrivacy)
+  const canSubmit = mode === 'signin' || (
+    agreedToS &&
+    agreedPrivacy &&
+    usernameStatus === 'available' &&
+    emailStatus !== 'taken'
+  )
+
+  // Check username availability as user types (debounced)
+  useEffect(() => {
+    if (mode !== 'signup') return
+    if (username.length < 3) { setUsernameStatus('idle'); return }
+
+    setUsernameStatus('checking')
+    const timer = setTimeout(async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', username)
+        .maybeSingle()
+
+      setUsernameStatus(data ? 'taken' : 'available')
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [username, mode])
+
+  // Check email as user types (debounced) — lightweight check
+  useEffect(() => {
+    if (mode !== 'signup') return
+    if (!email.includes('@') || !email.includes('.')) { setEmailStatus('idle'); return }
+
+    setEmailStatus('checking')
+    const timer = setTimeout(async () => {
+      // We check the profiles table by looking for matching auth users
+      // Supabase doesn't expose auth.users directly so we try sign in silently
+      const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .limit(1)
+      // We can't directly check emails without trying signup
+      // So we just clear the checking state — actual duplicate caught on submit
+      setEmailStatus('idle')
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [email, mode])
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (mode === 'signup' && (!agreedToS || !agreedPrivacy)) {
-      toast.error('Please accept the Terms of Service and Privacy Policy to continue.')
+      toast.error('Please accept the Terms of Service and Privacy Policy.')
+      return
+    }
+    if (mode === 'signup' && usernameStatus === 'taken') {
+      toast.error('That username is already taken.')
       return
     }
     setLoading(true)
     try {
       if (mode === 'signin') {
         const { error } = await signIn(email, password)
-        if (error) throw error
+        if (error) {
+          if (error.message.toLowerCase().includes('invalid login')) {
+            toast.error('Incorrect email or password. Try again or reset your password.')
+          } else if (error.message.toLowerCase().includes('email not confirmed')) {
+            toast.error('Please confirm your email address first. Check your inbox.')
+          } else {
+            toast.error(error.message)
+          }
+          return
+        }
         toast.success('Welcome back!')
         navigate('/')
       } else {
-        if (!username.trim()) {
-          toast.error('Please choose a username')
-          setLoading(false)
+        if (!username.trim()) { toast.error('Please choose a username'); setLoading(false); return }
+        if (username.length < 3) { toast.error('Username must be at least 3 characters'); setLoading(false); return }
+
+        const { data, error } = await signUp(email, password, username)
+        if (error) {
+          if (error.message.toLowerCase().includes('already registered') ||
+              error.message.toLowerCase().includes('already exists') ||
+              error.message.toLowerCase().includes('user already')) {
+            toast.error('An account with this email already exists. Try signing in instead.')
+            setMode('signin')
+          } else {
+            toast.error(error.message)
+          }
           return
         }
-        const { data, error } = await signUp(email, password, username)
-        if (error) throw error
 
         // Record legal acknowledgment + marketing preference
         if (data?.user) {
           await supabase.from('legal_acknowledgments').insert({
-            user_id:            data.user.id,
-            terms_version:      '2.1',
-            privacy_version:    '2.1',
-            agreed_at:          new Date().toISOString(),
-            ip_recorded:        true,
-            marketing_opt_in:   agreedMarketing,
+            user_id:          data.user.id,
+            terms_version:    '2.1',
+            privacy_version:  '2.1',
+            agreed_at:        new Date().toISOString(),
+            ip_recorded:      true,
+            marketing_opt_in: agreedMarketing,
           })
         }
 
         toast.success('Account created! Check your email to confirm.')
       }
     } catch (err) {
-      toast.error(err.message ?? 'Something went wrong')
+      toast.error(err.message ?? 'Something went wrong. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -87,14 +158,33 @@ export default function Auth() {
             {mode === 'signup' && (
               <div>
                 <label className="label">Username</label>
-                <input
-                  className="input"
-                  value={username}
-                  onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                  placeholder="hotwheelsdave"
-                  required
-                />
-                <p className="text-xs text-stone-400 mt-1">Lowercase letters, numbers and underscores only.</p>
+                <div className="relative">
+                  <input
+                    className={`input pr-9 ${
+                      usernameStatus === 'taken'     ? 'border-red-400 focus:ring-red-400' :
+                      usernameStatus === 'available' ? 'border-green-400 focus:ring-green-400' : ''
+                    }`}
+                    value={username}
+                    onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    placeholder="hotwheelsdave"
+                    minLength={3}
+                    required
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {usernameStatus === 'checking'  && <Loader size={15} className="text-stone-400 animate-spin" />}
+                    {usernameStatus === 'available' && <CheckCircle size={15} className="text-green-500" />}
+                    {usernameStatus === 'taken'     && <XCircle size={15} className="text-red-500" />}
+                  </div>
+                </div>
+                {usernameStatus === 'taken' && (
+                  <p className="text-xs text-red-500 mt-1">That username is already taken — try another.</p>
+                )}
+                {usernameStatus === 'available' && (
+                  <p className="text-xs text-green-600 mt-1">✓ Username is available!</p>
+                )}
+                {usernameStatus === 'idle' && (
+                  <p className="text-xs text-stone-400 mt-1">Lowercase letters, numbers and underscores only. Min 3 characters.</p>
+                )}
               </div>
             )}
 
@@ -123,83 +213,85 @@ export default function Auth() {
                 minLength={8}
                 required
               />
+              {mode === 'signup' && (
+                <p className="text-xs text-stone-400 mt-1">At least 8 characters.</p>
+              )}
             </div>
+
+            {/* Forgot password — signin only */}
+            {mode === 'signin' && (
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!email) { toast.error('Enter your email address first'); return }
+                    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                      redirectTo: `${window.location.origin}/auth?mode=reset`
+                    })
+                    if (error) toast.error(error.message)
+                    else toast.success('Password reset email sent! Check your inbox.')
+                  }}
+                  className="text-xs text-brand-500 hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
 
             {/* Legal acknowledgments — signup only */}
             {mode === 'signup' && (
               <div className="space-y-3 pt-3 border-t border-stone-100">
-
                 <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
                   Required agreements
                 </p>
 
-                {/* Terms + Seller Agreement */}
                 <CheckboxRow
                   checked={agreedToS}
                   onChange={setAgreedToS}
                   required
-                  label={
-                    <>
-                      I have read and agree to the{' '}
-                      <Link to="/terms" target="_blank" className="text-brand-500 hover:underline font-medium">
-                        Terms of Service
-                      </Link>{' '}
-                      and{' '}
-                      <Link to="/seller-agreement" target="_blank" className="text-brand-500 hover:underline font-medium">
-                        Seller Agreement
-                      </Link>
-                    </>
-                  }
+                  label={<>I have read and agree to the{' '}
+                    <Link to="/terms" target="_blank" className="text-brand-500 hover:underline font-medium">Terms of Service</Link>
+                    {' '}and{' '}
+                    <Link to="/seller-agreement" target="_blank" className="text-brand-500 hover:underline font-medium">Seller Agreement</Link>
+                  </>}
                 />
 
-                {/* Privacy Policy */}
                 <CheckboxRow
                   checked={agreedPrivacy}
                   onChange={setAgreedPrivacy}
                   required
-                  label={
-                    <>
-                      I have read and agree to the{' '}
-                      <Link to="/privacy" target="_blank" className="text-brand-500 hover:underline font-medium">
-                        Privacy Policy
-                      </Link>{' '}
-                      and consent to the collection and use of my data as described therein
-                    </>
-                  }
+                  label={<>I have read and agree to the{' '}
+                    <Link to="/privacy" target="_blank" className="text-brand-500 hover:underline font-medium">Privacy Policy</Link>
+                    {' '}and consent to the collection and use of my data</>}
                 />
 
-                {/* Warning if not both checked */}
                 {(!agreedToS || !agreedPrivacy) && (
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                     ⚠️ You must accept both agreements to create an account.
                   </p>
                 )}
 
-                {/* Divider */}
-                <div className="pt-1 border-t border-stone-100">
-                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
-                    Optional
-                  </p>
-
-                  {/* Marketing opt-in — pre-checked */}
+                <div className="pt-2 border-t border-stone-100">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Optional</p>
                   <CheckboxRow
                     checked={agreedMarketing}
                     onChange={setAgreedMarketing}
                     required={false}
-                    label="I'd like to receive news, promotions, and updates from TradeDiecast by email. You can unsubscribe at any time."
+                    label="I'd like to receive news, deals, and updates from TradeDiecast by email. Unsubscribe any time."
                   />
                 </div>
-
               </div>
             )}
 
-            {/* Submit button */}
+            {/* Submit */}
             <button
               type="submit"
               disabled={loading || !canSubmit}
               className="btn-primary w-full py-3 text-base disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {loading ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}
+              {loading
+                ? 'Please wait…'
+                : mode === 'signin' ? 'Sign in' : 'Create account'}
             </button>
 
           </form>
@@ -208,15 +300,13 @@ export default function Auth() {
           <div className="mt-6 text-center text-sm text-stone-400">
             {mode === 'signin' ? (
               <>Don't have an account?{' '}
-                <button onClick={() => setMode('signup')} className="text-brand-500 font-medium hover:underline">
-                  Sign up free
-                </button>
+                <button onClick={() => { setMode('signup'); setUsernameStatus('idle') }}
+                  className="text-brand-500 font-medium hover:underline">Sign up free</button>
               </>
             ) : (
               <>Already have an account?{' '}
-                <button onClick={() => setMode('signin')} className="text-brand-500 font-medium hover:underline">
-                  Sign in
-                </button>
+                <button onClick={() => setMode('signin')}
+                  className="text-brand-500 font-medium hover:underline">Sign in</button>
               </>
             )}
           </div>
@@ -240,9 +330,7 @@ function CheckboxRow({ checked, onChange, label, required }) {
         type="button"
         onClick={() => onChange(!checked)}
         className={`mt-0.5 shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-          checked
-            ? 'bg-brand-500 border-brand-500'
-            : 'border-stone-300 hover:border-brand-400'
+          checked ? 'bg-brand-500 border-brand-500' : 'border-stone-300 hover:border-brand-400'
         }`}
       >
         {checked && (
