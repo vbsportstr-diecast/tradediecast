@@ -11,8 +11,9 @@ export default function Auth() {
   const [password, setPass]       = useState('')
   const [username, setUsername]   = useState('')
   const [loading, setLoading]     = useState(false)
-  const [agreedToS, setAgreedToS]         = useState(false)
-  const [agreedPrivacy, setAgreedPrivacy] = useState(false)
+  const [agreedToS, setAgreedToS]             = useState(false)
+  const [agreedPrivacy, setAgreedPrivacy]     = useState(false)
+  const [agreedMarketing, setAgreedMarketing] = useState(true)
   const { signIn, signUp } = useAuth()
   const navigate = useNavigate()
 
@@ -32,18 +33,26 @@ export default function Auth() {
         toast.success('Welcome back!')
         navigate('/')
       } else {
-        if (!username.trim()) { toast.error('Please choose a username'); setLoading(false); return }
+        if (!username.trim()) {
+          toast.error('Please choose a username')
+          setLoading(false)
+          return
+        }
         const { data, error } = await signUp(email, password, username)
         if (error) throw error
+
+        // Record legal acknowledgment + marketing preference
         if (data?.user) {
           await supabase.from('legal_acknowledgments').insert({
-            user_id:         data.user.id,
-            terms_version:   '2.1',
-            privacy_version: '2.1',
-            agreed_at:       new Date().toISOString(),
-            ip_recorded:     true,
+            user_id:            data.user.id,
+            terms_version:      '2.1',
+            privacy_version:    '2.1',
+            agreed_at:          new Date().toISOString(),
+            ip_recorded:        true,
+            marketing_opt_in:   agreedMarketing,
           })
         }
+
         toast.success('Account created! Check your email to confirm.')
       }
     } catch (err) {
@@ -56,6 +65,7 @@ export default function Auth() {
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
+
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 font-serif text-2xl text-brand-500 mb-4">
             <Car size={24} /> TradeDiecast
@@ -64,105 +74,175 @@ export default function Auth() {
             {mode === 'signin' ? 'Welcome back' : 'Create your account'}
           </h1>
           <p className="text-stone-400 mt-2 text-sm">
-            {mode === 'signin' ? 'Sign in to buy, sell and track your collection.' : 'Join collectors on TradeDiecast.'}
+            {mode === 'signin'
+              ? 'Sign in to buy, sell and track your collection.'
+              : 'Join collectors on TradeDiecast. Free to sign up.'}
           </p>
         </div>
 
         <div className="card p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
 
+            {/* Username — signup only */}
             {mode === 'signup' && (
               <div>
                 <label className="label">Username</label>
-                <input className="input" value={username}
+                <input
+                  className="input"
+                  value={username}
                   onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                  placeholder="hotwheelsdave" required />
+                  placeholder="hotwheelsdave"
+                  required
+                />
                 <p className="text-xs text-stone-400 mt-1">Lowercase letters, numbers and underscores only.</p>
               </div>
             )}
 
+            {/* Email */}
             <div>
               <label className="label">Email address</label>
-              <input className="input" type="email" value={email}
+              <input
+                className="input"
+                type="email"
+                value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="you@example.com" required />
+                placeholder="you@example.com"
+                required
+              />
             </div>
 
+            {/* Password */}
             <div>
               <label className="label">Password</label>
-              <input className="input" type="password" value={password}
+              <input
+                className="input"
+                type="password"
+                value={password}
                 onChange={e => setPass(e.target.value)}
                 placeholder={mode === 'signup' ? 'At least 8 characters' : '••••••••'}
-                minLength={8} required />
+                minLength={8}
+                required
+              />
             </div>
 
+            {/* Legal acknowledgments — signup only */}
             {mode === 'signup' && (
               <div className="space-y-3 pt-3 border-t border-stone-100">
+
                 <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
-                  Legal agreements — required
+                  Required agreements
                 </p>
 
+                {/* Terms + Seller Agreement */}
                 <CheckboxRow
                   checked={agreedToS}
                   onChange={setAgreedToS}
-                  label={<>I have read and agree to the{' '}
-                    <Link to="/terms" target="_blank" className="text-brand-500 hover:underline font-medium">Terms of Service</Link>
-                    {' '}and{' '}
-                    <Link to="/seller-agreement" target="_blank" className="text-brand-500 hover:underline font-medium">Seller Agreement</Link>
-                  </>}
+                  required
+                  label={
+                    <>
+                      I have read and agree to the{' '}
+                      <Link to="/terms" target="_blank" className="text-brand-500 hover:underline font-medium">
+                        Terms of Service
+                      </Link>{' '}
+                      and{' '}
+                      <Link to="/seller-agreement" target="_blank" className="text-brand-500 hover:underline font-medium">
+                        Seller Agreement
+                      </Link>
+                    </>
+                  }
                 />
 
+                {/* Privacy Policy */}
                 <CheckboxRow
                   checked={agreedPrivacy}
                   onChange={setAgreedPrivacy}
-                  label={<>I have read and agree to the{' '}
-                    <Link to="/privacy" target="_blank" className="text-brand-500 hover:underline font-medium">Privacy Policy</Link>
-                    {' '}and consent to the collection and use of my data as described therein</>}
+                  required
+                  label={
+                    <>
+                      I have read and agree to the{' '}
+                      <Link to="/privacy" target="_blank" className="text-brand-500 hover:underline font-medium">
+                        Privacy Policy
+                      </Link>{' '}
+                      and consent to the collection and use of my data as described therein
+                    </>
+                  }
                 />
 
+                {/* Warning if not both checked */}
                 {(!agreedToS || !agreedPrivacy) && (
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                     ⚠️ You must accept both agreements to create an account.
                   </p>
                 )}
+
+                {/* Divider */}
+                <div className="pt-1 border-t border-stone-100">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
+                    Optional
+                  </p>
+
+                  {/* Marketing opt-in — pre-checked */}
+                  <CheckboxRow
+                    checked={agreedMarketing}
+                    onChange={setAgreedMarketing}
+                    required={false}
+                    label="I'd like to receive news, promotions, and updates from TradeDiecast by email. You can unsubscribe at any time."
+                  />
+                </div>
+
               </div>
             )}
 
-            <button type="submit" disabled={loading || !canSubmit}
-              className="btn-primary w-full py-3 text-base disabled:opacity-40 disabled:cursor-not-allowed">
+            {/* Submit button */}
+            <button
+              type="submit"
+              disabled={loading || !canSubmit}
+              className="btn-primary w-full py-3 text-base disabled:opacity-40 disabled:cursor-not-allowed"
+            >
               {loading ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}
             </button>
+
           </form>
 
+          {/* Mode toggle */}
           <div className="mt-6 text-center text-sm text-stone-400">
             {mode === 'signin' ? (
               <>Don't have an account?{' '}
-                <button onClick={() => setMode('signup')} className="text-brand-500 font-medium hover:underline">Sign up free</button>
+                <button onClick={() => setMode('signup')} className="text-brand-500 font-medium hover:underline">
+                  Sign up free
+                </button>
               </>
             ) : (
               <>Already have an account?{' '}
-                <button onClick={() => setMode('signin')} className="text-brand-500 font-medium hover:underline">Sign in</button>
+                <button onClick={() => setMode('signin')} className="text-brand-500 font-medium hover:underline">
+                  Sign in
+                </button>
               </>
             )}
           </div>
         </div>
 
-        <p className="text-center text-xs text-stone-400 mt-6">
-          Your acknowledgments are recorded with a timestamp for legal compliance.
-        </p>
+        {mode === 'signup' && (
+          <p className="text-center text-xs text-stone-400 mt-6">
+            Your agreements are recorded with a timestamp for legal compliance.
+          </p>
+        )}
+
       </div>
     </div>
   )
 }
 
-function CheckboxRow({ checked, onChange, label }) {
+function CheckboxRow({ checked, onChange, label, required }) {
   return (
     <label className="flex items-start gap-3 cursor-pointer">
       <button
         type="button"
         onClick={() => onChange(!checked)}
         className={`mt-0.5 shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-          checked ? 'bg-brand-500 border-brand-500' : 'border-stone-300 hover:border-brand-400'
+          checked
+            ? 'bg-brand-500 border-brand-500'
+            : 'border-stone-300 hover:border-brand-400'
         }`}
       >
         {checked && (
@@ -171,7 +251,10 @@ function CheckboxRow({ checked, onChange, label }) {
           </svg>
         )}
       </button>
-      <span className="text-xs text-stone-600 leading-relaxed">{label}</span>
+      <span className="text-xs text-stone-600 leading-relaxed">
+        {required && <span className="text-brand-500 mr-0.5">*</span>}
+        {label}
+      </span>
     </label>
   )
 }
