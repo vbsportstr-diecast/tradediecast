@@ -9,6 +9,9 @@ import Sell from './pages/Sell'
 import Profile from './pages/Profile'
 import Auth from './pages/Auth'
 import Dashboard from './pages/Dashboard'
+import TermsOfService from './pages/TermsOfService'
+import PrivacyPolicy from './pages/PrivacyPolicy'
+import SellerAgreement from './pages/SellerAgreement'
 import NotFound from './pages/NotFound'
 
 export default function App() {
@@ -18,14 +21,17 @@ export default function App() {
         <Navbar />
         <main className="flex-1">
           <Routes>
-            <Route path="/"              element={<Home />} />
-            <Route path="/browse"        element={<Browse />} />
-            <Route path="/listing/:id"   element={<Listing />} />
-            <Route path="/sell"          element={<Sell />} />
+            <Route path="/"                 element={<Home />} />
+            <Route path="/browse"           element={<Browse />} />
+            <Route path="/listing/:id"      element={<Listing />} />
+            <Route path="/sell"             element={<Sell />} />
             <Route path="/seller/:username" element={<Profile />} />
-            <Route path="/dashboard"     element={<Dashboard />} />
-            <Route path="/auth"          element={<Auth />} />
-            <Route path="*"              element={<NotFound />} />
+            <Route path="/dashboard"        element={<Dashboard />} />
+            <Route path="/auth"             element={<Auth />} />
+            <Route path="/terms"            element={<TermsOfService />} />
+            <Route path="/privacy"          element={<PrivacyPolicy />} />
+            <Route path="/seller-agreement" element={<SellerAgreement />} />
+            <Route path="*"                 element={<NotFound />} />
           </Routes>
         </main>
         <Footer />
