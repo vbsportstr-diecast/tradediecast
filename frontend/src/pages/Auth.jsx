@@ -24,7 +24,7 @@ export default function Auth() {
   const navigate = useNavigate()
 
   const canSubmit = mode === 'signin'
-    ? captchaToken
+    ? true
     : agreedToS && agreedPrivacy && usernameStatus === 'available' && captchaToken
 
   // Username availability check
@@ -225,16 +225,19 @@ export default function Auth() {
               </div>
             )}
 
-            {/* hCaptcha */}
-            <div className="flex justify-center pt-2">
-              <HCaptcha
-                sitekey={HCAPTCHA_SITE_KEY}
-                onVerify={token => setCaptchaToken(token)}
-                onExpire={() => setCaptchaToken(null)}
-                onError={() => { setCaptchaToken(null); toast.error('Captcha error — please try again.') }}
-                ref={captchaRef}
-              />
-            </div>
+
+            {/* hCaptcha — signup only */}
+            {mode === 'signup' && (
+              <div className="flex justify-center pt-2">
+                <HCaptcha
+                  sitekey={HCAPTCHA_SITE_KEY}
+                  onVerify={token => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken(null)}
+                  onError={() => { setCaptchaToken(null); toast.error('Captcha error — please try again.') }}
+                  ref={captchaRef}
+                />
+              </div>
+            )}
 
             {/* Submit */}
             <button type="submit" disabled={loading || !canSubmit}
