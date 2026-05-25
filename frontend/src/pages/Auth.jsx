@@ -139,7 +139,7 @@ export default function Auth() {
           setLoading(false)
           return
         }
-        const { data, error } = await signUp(email, password, username)
+        const { data, error } = await signUp(email, password, username, captchaToken)
         if (error) {
           if (error.message.toLowerCase().includes('already registered') ||
               error.message.toLowerCase().includes('already exists') ||
