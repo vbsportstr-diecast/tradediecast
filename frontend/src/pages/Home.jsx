@@ -17,15 +17,29 @@ export default function Home() {
   const [trending, setTrending] = useState([])
   const [recent,   setRecent]   = useState([])
   const [loading,  setLoading]  = useState(true)
+  const [stats,    setStats]    = useState(null)
 
   useEffect(() => {
     async function load() {
-      const [t, r] = await Promise.all([
+      const [t, r, listingCount, userCount, soldCount] = await Promise.all([
         supabase.from('listings').select('*, profiles(username, rating)').eq('status', 'active').order('view_count', { ascending: false }).limit(6),
         supabase.from('listings').select('*, profiles(username, rating)').eq('status', 'active').order('created_at', { ascending: false }).limit(8),
+        supabase.from('listings').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }),
+        supabase.from('orders').select('id', { count: 'exact', head: true }),
       ])
+
       setTrending(t.data ?? [])
       setRecent(r.data ?? [])
+
+      const listings   = listingCount.count ?? 0
+      const collectors = userCount.count    ?? 0
+      const sold       = soldCount.count    ?? 0
+
+      // Only show stats if we have meaningful numbers
+      const hasStats = listings > 0 || collectors > 0 || sold > 0
+      setStats(hasStats ? { listings, collectors, sold } : null)
+
       setLoading(false)
     }
     load()
@@ -39,24 +53,51 @@ export default function Home() {
           <h1 className="font-serif text-5xl md:text-6xl leading-tight mb-4">
             The marketplace for<br /><span className="text-brand-500">serious collectors</span>
           </h1>
-          <p className="text-stone-400 text-lg mb-8">Buy and sell Hot Wheels, Matchbox, Corgi, Tomica and more — with buyer protection on every order.</p>
+          <p className="text-stone-400 text-lg mb-8">
+            Buy and sell Hot Wheels, Matchbox, Corgi, Tomica and more — backed by our Purchase Assurance Program.
+          </p>
           <div className="flex gap-3 justify-center flex-wrap">
             <Link to="/browse" className="btn-primary px-8 py-3 text-base">Browse listings</Link>
             <Link to="/sell"   className="btn-secondary px-8 py-3 text-base bg-transparent border-stone-600 text-white hover:bg-stone-800">Start selling</Link>
           </div>
-          <div className="flex justify-center gap-8 mt-10 text-sm text-stone-400">
-            <div><strong className="text-white text-xl block">142K+</strong>listings</div>
-            <div><strong className="text-white text-xl block">38K+</strong>collectors</div>
-            <div><strong className="text-white text-xl block">$2.4M</strong>sold</div>
-          </div>
+
+          {/* Dynamic stats — only show when non-zero */}
+          {stats && (
+            <div className="flex justify-center gap-8 mt-10 text-sm text-stone-400">
+              {stats.listings > 0 && (
+                <div>
+                  <strong className="text-white text-xl block">
+                    {stats.listings.toLocaleString()}
+                  </strong>
+                  listings
+                </div>
+              )}
+              {stats.collectors > 0 && (
+                <div>
+                  <strong className="text-white text-xl block">
+                    {stats.collectors.toLocaleString()}
+                  </strong>
+                  collectors
+                </div>
+              )}
+              {stats.sold > 0 && (
+                <div>
+                  <strong className="text-white text-xl block">
+                    {stats.sold.toLocaleString()}
+                  </strong>
+                  sold
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
 
       {/* Trust bar */}
       <div className="bg-brand-500 py-3 px-4">
         <div className="max-w-7xl mx-auto flex flex-wrap justify-center gap-6 text-white text-sm">
-          <span className="flex items-center gap-2"><ShieldCheck size={16} /> Buyer protection on every order</span>
-          <span className="flex items-center gap-2"><RotateCcw size={16} /> 14-day returns</span>
+          <span className="flex items-center gap-2"><ShieldCheck size={16} /> Purchase Assurance Program</span>
+          <span className="flex items-center gap-2"><RotateCcw size={16} /> Dispute process available</span>
           <span className="flex items-center gap-2"><Star size={16} /> Verified seller ratings</span>
           <span className="flex items-center gap-2"><Lock size={16} /> Secure checkout</span>
         </div>
@@ -77,7 +118,10 @@ export default function Home() {
             {trending.map(l => <ListingCard key={l.id} listing={l} />)}
           </div>
         ) : (
-          <div className="text-center py-12 text-stone-400 mb-12">No listings yet — <Link to="/sell" className="text-brand-500">be the first to sell!</Link></div>
+          <div className="text-center py-12 text-stone-400 mb-12">
+            No listings yet —{' '}
+            <Link to="/sell" className="text-brand-500">be the first to sell!</Link>
+          </div>
         )}
 
         {/* Browse by brand */}
@@ -100,6 +144,12 @@ export default function Home() {
         {!loading && recent.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {recent.map(l => <ListingCard key={l.id} listing={l} />)}
+          </div>
+        )}
+        {!loading && recent.length === 0 && (
+          <div className="text-center py-12 text-stone-400">
+            No listings yet —{' '}
+            <Link to="/sell" className="text-brand-500">list your first car!</Link>
           </div>
         )}
       </div>
