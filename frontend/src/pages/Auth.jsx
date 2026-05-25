@@ -272,21 +272,24 @@ export default function Auth() {
 
 function CheckboxRow({ checked, onChange, label, required }) {
   return (
-    <label className="flex items-start gap-3 cursor-pointer">
-      <button type="button" onClick={() => onChange(!checked)}
+    <div className="flex items-start gap-3">
+      <button
+        type="button"
+        onClick={() => onChange(!checked)}
         className={`mt-0.5 shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
           checked ? 'bg-brand-500 border-brand-500' : 'border-stone-300 hover:border-brand-400'
-        }`}>
+        }`}
+      >
         {checked && (
           <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
         )}
       </button>
-      <span className="text-xs text-stone-600 leading-relaxed">
-        {required && <span className="text-brand-500 mr-0.5">*</span>}
+      <div className="flex-1 text-xs text-stone-600 leading-relaxed">
+        {required && <span className="text-brand-500 font-bold mr-1">*</span>}
         {label}
-      </span>
-    </label>
+      </div>
+    </div>
   )
 }
